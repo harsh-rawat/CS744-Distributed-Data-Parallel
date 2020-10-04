@@ -76,7 +76,7 @@ def train_model(model, train_loader, optimizer, criterion):
 
     iter_number = 1
     epoch_loss = 0
-    forwad_time = 0
+    forward_time = 0
     backward_time = 0
     total_time = 0
     # remember to exit the train loop at end of the epoch
@@ -84,7 +84,7 @@ def train_model(model, train_loader, optimizer, criterion):
         start_time = time.time()
         optimizer.zero_grad()
         predictions = model(data)
-        forwad_time += (time.time() - start_time)
+        forward_time += (time.time() - start_time)
 
         start_time_backward = time.time()
         loss = criterion(predictions, target)
@@ -100,10 +100,11 @@ def train_model(model, train_loader, optimizer, criterion):
             epoch_loss = epoch_loss / 20
             print('Training loss after {} epochs is {}'.format(iter_number, epoch_loss))
             epoch_loss = 0
-            print('Forward Pass time in iter {} is {}'.format(iter_number, forwad_time/20.0))
-            print('Backward Pass time in iter {} is {}'.format(iter_number, backward_time/20.0))
-            print('Average Pass time in iter {} is {}'.format(iter_number, total_time/20.0))
-            forwad_time = 0
+            if iter_number != 20:
+                print('Forward Pass time in iter {} is {}'.format(iter_number, forward_time/20.0))
+                print('Backward Pass time in iter {} is {}'.format(iter_number, backward_time/20.0))
+                print('Average Pass time in iter {} is {}'.format(iter_number, total_time/20.0))
+            forward_time = 0
             backward_time = 0
             total_time = 0
         iter_number += 1
