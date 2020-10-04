@@ -65,6 +65,8 @@ def test_model(model, test_loader, criterion):
 
 
 def main():
+    torch.manual_seed(0)
+    np.random.seed(0)
     normalize = transforms.Normalize(mean=[x / 255.0 for x in [125.3, 123.0, 113.9]],
                                      std=[x / 255.0 for x in [63.0, 62.1, 66.7]])
     transform_train = transforms.Compose([
