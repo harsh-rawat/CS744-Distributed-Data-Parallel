@@ -117,10 +117,10 @@ def train_model(model, train_loader, optimizer, criterion, rank):
 def average_gradients(model, rank):
     for p in model.parameters():
         if rank == 0:
-            inputs = [torch.empty(p.grad.size()) for _ in range(4)]
+            inputs = [torch.empty(p.grad.size()) for _ in range(dist.get_world_size())]
             dist.gather(p.grad, inputs)
             avg_grad = torch.mean(torch.stack(inputs), dim=0)
-            outputs = [avg_grad for _ in range(4)]
+            outputs = [avg_grad for _ in range(dist.get_world_size())]
             dist.scatter(p.grad, outputs)
         else:
             dist.gather(p.grad)
