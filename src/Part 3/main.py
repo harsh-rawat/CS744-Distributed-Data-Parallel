@@ -8,6 +8,7 @@ import torch
 import torch.distributed as dist
 import torch.optim as optim
 from torchvision import datasets, transforms
+from torch.nn.parallel import DistributedDataParallel as DDP
 
 import model as mdl
 
@@ -19,7 +20,7 @@ torch.set_num_threads(4)
 def run(rank, size, epochs, batch_size):
     torch.manual_seed(0)
     numpy.random.seed(0)
-    batch_size = int(batch_size / float(dist.get_world_size()))
+    batch_size = int(batch_size/float(dist.get_world_size()))
 
     normalize = transforms.Normalize(mean=[x / 255.0 for x in [125.3, 123.0, 113.9]],
                                      std=[x / 255.0 for x in [63.0, 62.1, 66.7]])
@@ -57,18 +58,19 @@ def run(rank, size, epochs, batch_size):
     training_criterion = torch.nn.CrossEntropyLoss().to(device)
 
     model = mdl.VGG11()
+    model = DDP(model)
     model.to(device)
     optimizer = optim.SGD(model.parameters(), lr=0.1,
                           momentum=0.9, weight_decay=0.0001)
     # running training for one epoch
     for epoch in range(epochs):
         start_time = time.time()
-        train_model(model, train_loader, optimizer, training_criterion, rank)
-        print('Training time after {} epoch is {}'.format(epoch + 1, (time.time() - start_time)))
+        train_model(model, train_loader, optimizer, training_criterion)
+        print('Training time after {} epoch is {}'.format(epoch+1, (time.time() - start_time)))
         test_model(model, test_loader, training_criterion)
 
 
-def train_model(model, train_loader, optimizer, criterion, rank):
+def train_model(model, train_loader, optimizer, criterion):
     """
     model (torch.nn.module): The model created to train
     train_loader (pytorch data loader): Training data loader
@@ -92,16 +94,15 @@ def train_model(model, train_loader, optimizer, criterion, rank):
         start_time_backward = time.time()
         loss = criterion(predictions, target)
         loss.backward()
-        average_gradients(model, rank)
         optimizer.step()
         backward_time += (time.time() - start_time_backward)
         total_time += (time.time() - start_time)
-
+        
         epoch_loss += loss
 
         if iter_number % 20 == 0:
             epoch_loss = epoch_loss / 20
-            print('Training loss after {} epochs is {}'.format(iter_number, epoch_loss))
+            print('Training loss after {} iterations is {}'.format(iter_number, epoch_loss))
             epoch_loss = 0
             if iter_number != 20:
                 print('Forward Pass time in iter {} is {}'.format(iter_number, forward_time / 20.0))
@@ -110,21 +111,7 @@ def train_model(model, train_loader, optimizer, criterion, rank):
             forward_time = 0
             backward_time = 0
             total_time = 0
-
         iter_number += 1
-
-
-def average_gradients(model, rank):
-    for p in model.parameters():
-        if rank == 0:
-            inputs = [torch.empty(p.grad.size()) for _ in range(4)]
-            dist.gather(p.grad, inputs)
-            avg_grad = torch.mean(torch.stack(inputs), dim=0)
-            outputs = [avg_grad for _ in range(4)]
-            dist.scatter(p.grad, outputs)
-        else:
-            dist.gather(p.grad)
-            dist.scatter(p.grad)
 
 
 def test_model(model, test_loader, criterion):

@@ -19,7 +19,7 @@ torch.set_num_threads(4)
 def run(rank, size, epochs, batch_size):
     torch.manual_seed(0)
     numpy.random.seed(0)
-    batch_size = int(batch_size / float(dist.get_world_size()))
+    batch_size = int(batch_size/float(dist.get_world_size()))
 
     normalize = transforms.Normalize(mean=[x / 255.0 for x in [125.3, 123.0, 113.9]],
                                      std=[x / 255.0 for x in [63.0, 62.1, 66.7]])
@@ -63,12 +63,12 @@ def run(rank, size, epochs, batch_size):
     # running training for one epoch
     for epoch in range(epochs):
         start_time = time.time()
-        train_model(model, train_loader, optimizer, training_criterion, rank)
+        train_model(model, train_loader, optimizer, training_criterion)
         print('Training time after {} epoch is {}'.format(epoch + 1, (time.time() - start_time)))
         test_model(model, test_loader, training_criterion)
 
 
-def train_model(model, train_loader, optimizer, criterion, rank):
+def train_model(model, train_loader, optimizer, criterion):
     """
     model (torch.nn.module): The model created to train
     train_loader (pytorch data loader): Training data loader
@@ -92,7 +92,7 @@ def train_model(model, train_loader, optimizer, criterion, rank):
         start_time_backward = time.time()
         loss = criterion(predictions, target)
         loss.backward()
-        average_gradients(model, rank)
+        average_gradients_allreduce(model)
         optimizer.step()
         backward_time += (time.time() - start_time_backward)
         total_time += (time.time() - start_time)
@@ -104,27 +104,19 @@ def train_model(model, train_loader, optimizer, criterion, rank):
             print('Training loss after {} epochs is {}'.format(iter_number, epoch_loss))
             epoch_loss = 0
             if iter_number != 20:
-                print('Forward Pass time in iter {} is {}'.format(iter_number, forward_time / 20.0))
-                print('Backward Pass time in iter {} is {}'.format(iter_number, backward_time / 20.0))
-                print('Average Pass time in iter {} is {}'.format(iter_number, total_time / 20.0))
+                print('Forward Pass time in iter {} is {}'.format(iter_number, forward_time/20.0))
+                print('Backward Pass time in iter {} is {}'.format(iter_number, backward_time/20.0))
+                print('Average Pass time in iter {} is {}'.format(iter_number, total_time/20.0))
             forward_time = 0
             backward_time = 0
             total_time = 0
-
         iter_number += 1
 
 
-def average_gradients(model, rank):
-    for p in model.parameters():
-        if rank == 0:
-            inputs = [torch.empty(p.grad.size()) for _ in range(4)]
-            dist.gather(p.grad, inputs)
-            avg_grad = torch.mean(torch.stack(inputs), dim=0)
-            outputs = [avg_grad for _ in range(4)]
-            dist.scatter(p.grad, outputs)
-        else:
-            dist.gather(p.grad)
-            dist.scatter(p.grad)
+def average_gradients_allreduce(model):
+    for model_params in model.parameters():
+        dist.all_reduce(model_params.grad.data, op=dist.reduce_op.SUM)
+        model_params.grad.data /= float(dist.get_world_size())
 
 
 def test_model(model, test_loader, criterion):

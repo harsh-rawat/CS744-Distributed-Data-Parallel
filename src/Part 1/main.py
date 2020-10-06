@@ -13,6 +13,7 @@ torch.set_num_threads(4)
 batch_size = 256  # batch for one node
 
 
+# A function which runs the training and testing of model for given number of epochs
 def train_model(model, train_loader, optimizer, criterion, epoch):
     """
     model (torch.nn.module): The model created to train
@@ -114,7 +115,9 @@ def main():
                           momentum=0.9, weight_decay=0.0001)
     # running training for one epoch
     for epoch in range(1):
+        start_time = time.time()
         train_model(model, train_loader, optimizer, training_criterion, epoch)
+        print('Training time after {} epoch is {}'.format(epoch + 1, (time.time() - start_time)))
         test_model(model, test_loader, training_criterion)
 
 
